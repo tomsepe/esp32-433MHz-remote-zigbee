@@ -37,6 +37,8 @@ The FeatherWing plugs directly onto the ESP32-C6 Feather using the STEMMA QT con
     └── ha_mqtt.cpp       # Home Assistant MQTT integration implementation
 ```
 
+For detailed hardware assembly, Flipper Zero capture steps, and power setup, see **[SETUP.md](SETUP.md)**.
+
 ## Development Setup
 
 ### Prerequisites
