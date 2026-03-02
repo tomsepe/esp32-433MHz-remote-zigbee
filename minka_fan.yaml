@@ -1,0 +1,110 @@
+# ESPHome Configuration for Minka Aire 433MHz Fan Remote
+# ESP32-C6 Feather with RFM69HCW 433MHz FeatherWing
+
+esphome:
+  name: minka-fan-remote
+  friendly_name: Minka Aire Fan Remote
+  comment: 433MHz RF remote for Minka Aire ceiling fan
+  on_boot:
+    priority: 100
+    then:
+      - lambda: 'Serial.println("Minka Aire Fan Remote started");'
+
+# Enable logging
+logger:
+  level: DEBUG
+  hardware_uart: UART0
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key  # Generate with: esphome encryption
+
+# Enable OTA updates
+ota:
+  password: !secret ota_password
+
+# WiFi connection
+wifi:
+  ssid: !secret wifi ssid
+  password: !secret wifi_password
+  reboot_timeout: 300s  # 5 minutes to connect
+
+  # Enable fallback hotspot if WiFi fails
+  ap:
+    ssid: "Minka-Fan-Remote-Fallback"
+    password: "fallback123"
+
+# MQTT for Home Assistant integration
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  discovery: true
+  discovery_prefix: homeassistant
+  birth_message:
+    topic: "homeassistant/status"
+    payload: "online"
+  will_message:
+    topic: "homeassistant/status"
+    payload: "offline"
+
+# ESP32-C6 specific configuration
+esp32:
+  board: adafruit_feather_c6
+  framework:
+    type: arduino
+
+# GPIO pins for RFM69HCW FeatherWing (STEMMA QT)
+# SPI pins for ESP32-C6
+# SCK: GPIO 4, MISO: GPIO 6, MOSI: GPIO 5, CS: GPIO 14
+
+# Fan component
+fan:
+  - platform: template
+    name: "Minka Aire Fan"
+    turn_on_action:
+      - lambda: |-
+          // Send RF signal for fan ON
+          // TODO: Implement RF transmission via custom component
+          Serial.println("Fan ON command received");
+    turn_off_action:
+      - lambda: |-
+          // Send RF signal for fan OFF
+          Serial.println("Fan OFF command received");
+    set_speed_action:
+      - lambda: |-
+          // Send RF signal for specific speed
+          int speed = id(minka_fan).speed;
+          Serial.printf("Fan speed set to: %d\n", speed);
+    speeds:
+      - LOW
+      - MEDIUM
+      - HIGH
+
+# Light component (if fan has integrated light)
+light:
+  - platform: template
+    name: "Minka Aire Light"
+    turn_on_action:
+      - lambda: |-
+          // Send RF signal for light ON
+          Serial.println("Light ON command received");
+    turn_off_action:
+      - lambda: |-
+          // Send RF signal for light OFF
+          Serial.println("Light OFF command received");
+
+# Web server for local control (optional)
+web_server:
+  port: 80
+  auth:
+    username: !secret web_username
+    password: !secret web_password
+
+# Text sensor for device info
+text_sensor:
+  - platform: template
+    name: "Firmware Version"
+    icon: "mdi:package-variant"
+    lambda: 'return "1.0.0";'

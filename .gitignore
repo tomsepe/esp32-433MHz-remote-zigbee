@@ -1,0 +1,25 @@
+# PlatformIO
+.pio/
+build/
+dist/
+
+# ESPHome
+*.pyc
+__pycache__/
+
+# Secrets (NEVER commit these!)
+secrets.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
