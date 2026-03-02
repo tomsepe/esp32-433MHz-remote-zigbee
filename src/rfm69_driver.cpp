@@ -155,7 +155,7 @@ void RFM69Driver::sendWithRetry(const uint8_t* data, uint8_t length, uint8_t ret
         Serial.print("  Attempt ");
         Serial.println(i + 1);
 
-        transmitRaw(data, length);
+        (void)transmitRaw(data, length);
 
         // Wait between transmissions to match remote timing
         delay(100);

@@ -26,16 +26,15 @@ The FeatherWing plugs directly onto the ESP32-C6 Feather using the STEMMA QT con
 
 ```
 .
-├── platformio.ini      # PlatformIO build configuration
-├── minka_fan.yaml      # ESPHome configuration (alternative approach)
-├── secrets.example.yaml # Template for secrets file
+├── platformio.ini        # PlatformIO build configuration
 └── src/
-    ├── main.cpp        # Application entry point
-    ├── config.h        # WiFi, MQTT, and RF signal configuration
-    ├── rfm69_driver.h  # RFM69 radio driver header
-    ├── rfm69_driver.cpp # RFM69 radio driver implementation
-    ├── ha_mqtt.h       # Home Assistant MQTT integration header
-    └── ha_mqtt.cpp     # Home Assistant MQTT integration implementation
+    ├── main.cpp          # Application entry point
+    ├── config.h          # WiFi, MQTT, RF signal configuration
+    ├── secrets.example.h # Template for credentials (copy to secrets.h)
+    ├── rfm69_driver.h    # RFM69 radio driver header
+    ├── rfm69_driver.cpp  # RFM69 radio driver implementation
+    ├── ha_mqtt.h         # Home Assistant MQTT integration header
+    └── ha_mqtt.cpp       # Home Assistant MQTT integration implementation
 ```
 
 ## Development Setup
@@ -49,14 +48,18 @@ The FeatherWing plugs directly onto the ESP32-C6 Feather using the STEMMA QT con
 
 1. **Clone/Open the project** in PlatformIO
 
-2. **Configure WiFi and MQTT** in `src/config.h`:
-   ```cpp
-   const char* WIFI_SSID = "your_wifi_ssid";
-   const char* WIFI_PASSWORD = "your_wifi_password";
+2. **Configure credentials** — either:
+   - Copy `src/secrets.example.h` to `src/secrets.h` and fill in your values (recommended; `secrets.h` is gitignored), or
+   - Edit the fallback values in `src/config.h`
 
-   const char* MQTT_SERVER = "192.168.1.100";  // Home Assistant IP
-   const char* MQTT_USER = "";
-   const char* MQTT_PASSWORD = "";
+   ```cpp
+   // In secrets.h or config.h:
+   #define WIFI_SSID "your_wifi_ssid"
+   #define WIFI_PASSWORD "your_wifi_password"
+   #define MQTT_SERVER "192.168.1.100"
+   #define MQTT_PORT 1883
+   #define MQTT_USER ""
+   #define MQTT_PASSWORD ""
    ```
 
 3. **Add your captured RF signals** in `src/config.h`:
@@ -75,14 +78,6 @@ The FeatherWing plugs directly onto the ESP32-C6 Feather using the STEMMA QT con
    ```bash
    pio device monitor
    ```
-
-### ESPHome Alternative
-
-For a pure ESPHome approach (recommended for easier Home Assistant integration):
-
-1. Copy `secrets.example.yaml` to `secrets.yaml` and fill in your credentials
-2. Edit `minka_fan.yaml` with your settings
-3. Flash with: `esphome minka_fan.yaml`
 
 ## Capturing RF Signals with Flipper Zero
 
@@ -148,24 +143,21 @@ light:
 Once the device is connected to WiFi, you can update firmware over-the-air:
 
 ```bash
-# Using PlatformIO
 pio run --target upload
-
-# Using ESPHome
-esphome upload minka_fan.yaml
 ```
 
 ## Troubleshooting
 
 ### Device not connecting to WiFi
 
-- Check SSID and password in `config.h`
+- Check SSID and password in `src/config.h` or `src/secrets.h`
 - Verify the ESP32 is within range of your router
 - Check serial output for error messages
 
 ### Fan not responding to commands
 
-- Verify the RF signal codes are correct
+- **RFM69 vs. OOK**: The RFM69 uses FSK modulation. Many 433MHz remotes (including Minka Aire) use OOK/ASK. If the fan does not respond, the RFM69 may be incompatible—consider an OOK-capable transmitter (e.g. SYN115, TX433).
+- Verify the RF signal codes in `config.h` match your captured data
 - Ensure the ESP32 is within range of the fan
 - Try moving the ESP32 closer to the fan
 - Check the RFM69 FeatherWing is properly seated
@@ -173,7 +165,7 @@ esphome upload minka_fan.yaml
 ### MQTT connection fails
 
 - Verify Home Assistant MQTT broker is running
-- Check MQTT credentials in `config.h`
+- Check MQTT credentials in `src/config.h` or `src/secrets.h`
 - Ensure firewall allows MQTT traffic (port 1883)
 
 ## License

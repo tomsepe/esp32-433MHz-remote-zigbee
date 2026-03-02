@@ -25,7 +25,7 @@ pio run --target clean
 ## Architecture
 
 - `src/main.cpp` - Entry point, WiFi/MQTT setup, command dispatch
-- `src/config.h` - WiFi credentials, MQTT settings, captured RF signal data
+- `src/config.h` - WiFi/MQTT settings (or use secrets.h), captured RF signal data
 - `src/rfm69_driver.{h,cpp}` - RFM69HCW radio driver abstraction
 - `src/ha_mqtt.{h,cpp}` - Home Assistant MQTT Discovery payloads
 
@@ -35,6 +35,7 @@ pio run --target clean
 - RFM69 operates at 433MHz, 22dBm max power
 - MQTT topics follow Home Assistant Discovery convention
 - RF signal data in `config.h` must be replaced with actual Flipper Zero captures
+- RFM69 uses FSK; many 433MHz remotes use OOK—may be incompatible with some fans
 
 ## Dependencies
 

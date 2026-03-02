@@ -18,6 +18,16 @@
 #include "ha_mqtt.h"
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+#define JSON_PAYLOAD_SIZE     256
+#define MQTT_LOOP_DELAY_MS    50
+#define WIFI_RETRY_INTERVAL_MS 30000  // Try WiFi reconnect every 30s
+#define FAN_SPEED_MIN         1
+#define FAN_SPEED_MAX         3
+
+// ============================================================================
 // GLOBAL VARIABLES
 // ============================================================================
 
@@ -27,6 +37,11 @@ RFM69Driver rfm69;
 
 bool wifiConnected = false;
 bool mqttConnected = false;
+
+// Track state for MQTT publishing (optimistic - we don't receive RF feedback)
+int lastFanPercentage = 0;   // 0=off, 33=low, 66=med, 100=high
+bool lastLightState = false;
+unsigned long lastWifiRetry = 0;
 
 // ============================================================================
 // SETUP - Initialize all components
@@ -70,19 +85,28 @@ void setup() {
 // ============================================================================
 
 void loop() {
-    // Maintain MQTT connection
-    if (mqttConnected) {
-        mqttClient.loop();
-
-        // Reconnect if disconnected
-        if (!mqttClient.connected()) {
-            Serial.println("MQTT disconnected, reconnecting...");
+    // Periodic WiFi reconnect when disconnected
+    if (!wifiConnected && (millis() - lastWifiRetry > WIFI_RETRY_INTERVAL_MS)) {
+        lastWifiRetry = millis();
+        Serial.println("Retrying WiFi connection...");
+        connectWiFi();
+        if (wifiConnected && !mqttConnected) {
             setupMQTT();
         }
     }
 
-    // Small delay to prevent busy-waiting
-    delay(50);
+    // Maintain MQTT connection
+    if (mqttConnected) {
+        mqttClient.loop();
+
+        if (!mqttClient.connected()) {
+            Serial.println("MQTT disconnected, reconnecting...");
+            mqttConnected = false;
+            setupMQTT();
+        }
+    }
+
+    delay(MQTT_LOOP_DELAY_MS);
 }
 
 // ============================================================================
@@ -128,22 +152,27 @@ void setupMQTT() {
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
 
-    // Generate unique client ID
-    String clientId = String(DEVICE_NAME) + "_" + String(ESP.getChipId(), HEX);
+    // Generate unique client ID from MAC (ESP.getChipId deprecated on ESP32-C6)
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    char clientIdBuf[40];
+    snprintf(clientIdBuf, sizeof(clientIdBuf), "%s_%02x%02x%02x%02x%02x%02x",
+             DEVICE_NAME, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     // Connect to MQTT broker
     while (!mqttClient.connected()) {
         Serial.print("Connecting to MQTT...");
 
-        if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        if (mqttClient.connect(clientIdBuf, MQTT_USER, MQTT_PASSWORD)) {
             mqttConnected = true;
             Serial.println("Connected!");
 
             // Subscribe to Home Assistant command topics
             mqttClient.subscribe(MQTT_FAN_TOPIC);
+            mqttClient.subscribe(HA_FAN_PERCENTAGE_TOPIC);
             mqttClient.subscribe(MQTT_LIGHT_TOPIC);
 
-            // Announce device presence
+            // Announce device and publish discovery
             announceDevice();
         } else {
             Serial.print("Failed, rc=");
@@ -159,8 +188,10 @@ void setupMQTT() {
 // ============================================================================
 
 void announceDevice() {
-    // Send device availability status
-    mqttClient.publish(MQTT_AVAILABILITY_TOPIC, "online", true);
+    // Publish MQTT Discovery payloads for automatic HA integration
+    HADiscovery::publishFanConfig(mqttClient);
+    HADiscovery::publishLightConfig(mqttClient);
+    HADiscovery::publishAvailability(mqttClient, "online");
     Serial.println("Device announced to Home Assistant");
 }
 
@@ -172,28 +203,69 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.print("MQTT Topic: ");
     Serial.println(topic);
 
-    // Parse JSON payload
-    StaticJsonDocument<256> doc;
-    DeserializationError error = deserializeJson(doc, payload, length);
-
-    if (error) {
-        Serial.print("JSON parse error: ");
-        Serial.println(error.c_str());
+    // Handle fan percentage topic (raw payload: "0"-"100")
+    if (strcmp(topic, HA_FAN_PERCENTAGE_TOPIC) == 0) {
+        char buf[8];
+        size_t copyLen = (length < sizeof(buf) - 1) ? length : sizeof(buf) - 1;
+        memcpy(buf, payload, copyLen);
+        buf[copyLen] = '\0';
+        int pct = atoi(buf);
+        int speed = (pct <= 0) ? 0 : (pct <= 33) ? 1 : (pct <= 66) ? 2 : 3;
+        if (speed == 0) {
+            transmitFanOff();
+        } else {
+            transmitFanSpeed(speed);
+        }
         return;
     }
 
-    // Handle fan commands
+    // Handle fan command topic (JSON or raw "ON"/"OFF")
     if (strcmp(topic, MQTT_FAN_TOPIC) == 0) {
-        const char* command = doc["command"];
-        if (command) {
-            handleFanCommand(command, doc);
+        if (length <= 4) {
+            // Raw payload: ON, OFF
+            char buf[8];
+            memcpy(buf, payload, length);
+            buf[length] = '\0';
+            if (strcmp(buf, "ON") == 0 || strcmp(buf, "on") == 0) {
+                transmitFanSpeed(1);
+                return;
+            }
+            if (strcmp(buf, "OFF") == 0 || strcmp(buf, "off") == 0) {
+                transmitFanOff();
+                return;
+            }
         }
+        StaticJsonDocument<JSON_PAYLOAD_SIZE> doc;
+        if (deserializeJson(doc, payload, length) == DeserializationError::Ok) {
+            const char* command = doc["command"];
+            if (command) {
+                handleFanCommand(command, doc);
+            }
+        }
+        return;
     }
-    // Handle light commands
-    else if (strcmp(topic, MQTT_LIGHT_TOPIC) == 0) {
-        const char* command = doc["command"];
-        if (command) {
-            handleLightCommand(command);
+
+    // Handle light command topic (JSON or raw "ON"/"OFF")
+    if (strcmp(topic, MQTT_LIGHT_TOPIC) == 0) {
+        if (length <= 4) {
+            char buf[8];
+            memcpy(buf, payload, length);
+            buf[length] = '\0';
+            if (strcmp(buf, "ON") == 0 || strcmp(buf, "on") == 0) {
+                transmitLightOn();
+                return;
+            }
+            if (strcmp(buf, "OFF") == 0 || strcmp(buf, "off") == 0) {
+                transmitLightOff();
+                return;
+            }
+        }
+        StaticJsonDocument<JSON_PAYLOAD_SIZE> doc;
+        if (deserializeJson(doc, payload, length) == DeserializationError::Ok) {
+            const char* command = doc["command"];
+            if (command) {
+                handleLightCommand(command);
+            }
         }
     }
 }
@@ -241,22 +313,42 @@ void handleLightCommand(const char* command) {
 // ============================================================================
 
 void transmitFanSpeed(int speed) {
+    // Clamp to valid range; driver will reject invalid values
+    int clamped = (speed < FAN_SPEED_MIN) ? FAN_SPEED_MIN
+                : (speed > FAN_SPEED_MAX) ? FAN_SPEED_MAX : speed;
+    int pct = (clamped == 1) ? 33 : (clamped == 2) ? 66 : 100;
     Serial.print("Transmitting fan speed ");
-    Serial.println(speed);
-    rfm69.transmitSignal(speed);
+    Serial.println(clamped);
+    rfm69.transmitSignal(clamped);
+    lastFanPercentage = pct;
+    if (mqttConnected) {
+        HADiscovery::publishFanState(mqttClient, "on", pct);
+    }
 }
 
 void transmitFanOff() {
     Serial.println("Transmitting fan off");
     rfm69.transmitFanOff();
+    lastFanPercentage = 0;
+    if (mqttConnected) {
+        HADiscovery::publishFanState(mqttClient, "off", 0);
+    }
 }
 
 void transmitLightOn() {
     Serial.println("Transmitting light on");
     rfm69.transmitLightOn();
+    lastLightState = true;
+    if (mqttConnected) {
+        HADiscovery::publishLightState(mqttClient, "on");
+    }
 }
 
 void transmitLightOff() {
     Serial.println("Transmitting light off");
     rfm69.transmitLightOff();
+    lastLightState = false;
+    if (mqttConnected) {
+        HADiscovery::publishLightState(mqttClient, "off");
+    }
 }
