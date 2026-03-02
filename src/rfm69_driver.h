@@ -44,14 +44,6 @@ public:
      */
     void transmitLightOff();
 
-    /**
-     * Transmit raw signal data
-     * @param data Pointer to signal data array
-     * @param length Length of the signal data
-     * @return true if transmission successful
-     */
-    bool transmitRaw(const uint8_t* data, uint8_t length);
-
 private:
     bool initialized = false;
 
@@ -59,6 +51,12 @@ private:
      * Configure RFM69 for 433MHz operation
      */
     void configureRF();
+
+    /**
+     * Transmit raw signal data (internal use)
+     * @return true if transmission successful
+     */
+    bool transmitRaw(const uint8_t* data, uint8_t length);
 
     /**
      * Send a signal with retry logic

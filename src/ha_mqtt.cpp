@@ -15,10 +15,11 @@
 void HADiscovery::publishFanConfig(PubSubClient& client) {
     StaticJsonDocument<512> doc;
 
-    // Device information
+    // Device information (identifiers must be array per HA spec)
     JsonObject device = doc.createNestedObject("device");
     device["name"] = "Minka Aire Fan";
-    device["identifiers"] = DEVICE_NAME;
+    JsonArray ids = device.createNestedArray("identifiers");
+    ids.add(DEVICE_NAME);
     device["manufacturer"] = "Minka Aire";
     device["model"] = "433MHz Remote Control";
     device["sw_version"] = "1.0.0";
@@ -33,9 +34,12 @@ void HADiscovery::publishFanConfig(PubSubClient& client) {
 
     // Speed control
     doc["speed_state_topic"] = HA_FAN_STATE_TOPIC;
-    doc["speed_command_topic"] = HA_FAN_COMMAND_TOPIC + "/speed";
+    doc["speed_command_topic"] = HA_FAN_COMMAND_TOPIC "/speed";
     doc["percentage"] = true;
-    doc["percentage_command_topic"] = HA_FAN_COMMAND_TOPIC + "/percentage";
+    doc["percentage_command_topic"] = HA_FAN_COMMAND_TOPIC "/percentage";
+    doc["percentage_state_topic"] = HA_FAN_STATE_TOPIC;
+    doc["percentage_value_template"] = "{{ value_json.percentage }}";
+    doc["state_value_template"] = "{{ value_json.state }}";
 
     // Preserve state
     doc["retain"] = true;
@@ -43,11 +47,12 @@ void HADiscovery::publishFanConfig(PubSubClient& client) {
     doc["payload_off"] = "off";
 
     // Serialize and publish
-    DynamicJsonDocument buffer(1024);
-    serializeJson(doc, buffer);
-
-    client.publish(HA_FAN_CONFIG_TOPIC, buffer.c_str(), true);
-    Serial.println("Published fan discovery payload");
+    char buffer[1024];
+    size_t len = serializeJson(doc, buffer, sizeof(buffer));
+    if (len > 0) {
+        client.publish(HA_FAN_CONFIG_TOPIC, buffer, true);
+        Serial.println("Published fan discovery payload");
+    }
 }
 
 // ============================================================================
@@ -57,10 +62,11 @@ void HADiscovery::publishFanConfig(PubSubClient& client) {
 void HADiscovery::publishLightConfig(PubSubClient& client) {
     StaticJsonDocument<512> doc;
 
-    // Device information
+    // Device information (identifiers must be array per HA spec)
     JsonObject device = doc.createNestedObject("device");
     device["name"] = "Minka Aire Fan";
-    device["identifiers"] = DEVICE_NAME;
+    JsonArray ids = device.createNestedArray("identifiers");
+    ids.add(DEVICE_NAME);
     device["manufacturer"] = "Minka Aire";
     device["model"] = "433MHz Remote Control";
     device["sw_version"] = "1.0.0";
@@ -79,11 +85,12 @@ void HADiscovery::publishLightConfig(PubSubClient& client) {
     doc["payload_off"] = "off";
 
     // Serialize and publish
-    DynamicJsonDocument buffer(1024);
-    serializeJson(doc, buffer);
-
-    client.publish(HA_LIGHT_CONFIG_TOPIC, buffer.c_str(), true);
-    Serial.println("Published light discovery payload");
+    char buffer[1024];
+    size_t len = serializeJson(doc, buffer, sizeof(buffer));
+    if (len > 0) {
+        client.publish(HA_LIGHT_CONFIG_TOPIC, buffer, true);
+        Serial.println("Published light discovery payload");
+    }
 }
 
 // ============================================================================
@@ -95,4 +102,17 @@ void HADiscovery::publishAvailability(PubSubClient& client, const char* status) 
     client.publish(HA_LIGHT_AVAILABILITY_TOPIC, status, true);
     Serial.print("Published availability status: ");
     Serial.println(status);
+}
+
+void HADiscovery::publishFanState(PubSubClient& client, const char* state, int percentage) {
+    StaticJsonDocument<64> doc;
+    doc["state"] = state;
+    doc["percentage"] = percentage;
+    char buf[64];
+    serializeJson(doc, buf, sizeof(buf));
+    client.publish(HA_FAN_STATE_TOPIC, buf, true);
+}
+
+void HADiscovery::publishLightState(PubSubClient& client, const char* state) {
+    client.publish(HA_LIGHT_STATE_TOPIC, state, true);
 }

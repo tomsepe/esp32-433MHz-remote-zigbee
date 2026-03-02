@@ -1,18 +1,26 @@
 /**
  * Configuration file for ESP32 433MHz Remote
  *
- * Edit this file with your network credentials and MQTT settings
+ * For credentials, use secrets.h (copy from secrets.example.h).
+ * Fallback: define credentials here (do NOT commit to git).
  */
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ============================================================================
-// WIFI CONFIGURATION
-// ============================================================================
+// Include secrets if available (create from secrets.example.h)
+#ifdef __has_include
+  #if __has_include("secrets.h")
+    #include "secrets.h"
+  #endif
+#endif
 
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+#ifndef WIFI_SSID
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#endif
 
 // ============================================================================
 // DEVICE CONFIGURATION
@@ -24,16 +32,20 @@ const char* DEVICE_NAME = "minka-fan-remote";
 // MQTT CONFIGURATION (Home Assistant)
 // ============================================================================
 
-const char* MQTT_SERVER = "192.168.1.100";  // Home Assistant IP
-const int MQTT_PORT = 1883;
-const char* MQTT_USER = "";                  // Leave empty if no auth
-const char* MQTT_PASSWORD = "";              // Leave empty if no auth
+#ifndef MQTT_SERVER
+#define MQTT_SERVER "192.168.1.100"
+#endif
+#ifndef MQTT_PORT
+#define MQTT_PORT 1883
+#endif
+#ifndef MQTT_USER
+#define MQTT_USER ""
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD ""
+#endif
 
-// MQTT Topics for Home Assistant discovery
-#define MQTT_BASE_TOPIC "homeassistant"
-#define MQTT_FAN_TOPIC "homeassistant/fan/minka_fan/config"
-#define MQTT_LIGHT_TOPIC "homeassistant/light/minka_light/config"
-#define MQTT_AVAILABILITY_TOPIC "homeassistant/fan/minka_fan/availability"
+// MQTT topic definitions are in ha_mqtt.h (command, state, config, availability)
 
 // ============================================================================
 // RFM69HCW PIN DEFINITIONS (ESP32-C6 Feather STEMMA QT)
@@ -81,10 +93,14 @@ const char* MQTT_PASSWORD = "";              // Leave empty if no auth
 // CAPTURED RF SIGNALS (FROM FLIPPER ZERO)
 // ============================================================================
 //
+// IMPORTANT: RFM69 uses FSK modulation; many 433MHz remotes (including
+// Minka Aire) use OOK/ASK. The RFM69 may not replicate OOK signals.
+// If the fan does not respond, consider an OOK-capable transmitter
+// (e.g. SYN115, TX433) or verify your fan's modulation scheme.
+//
 // TODO: Replace these placeholder values with your actual captured signals
 // from the Flipper Zero Sub-GHz capture.
 //
-// The Minka Aire remote uses pulse-position modulation (PPM) or similar.
 // Use Flipper Zero to capture the actual signal patterns, then convert
 // to the format expected by the RFM69 library.
 //

@@ -22,6 +22,7 @@
 #define HA_FAN_COMMAND_TOPIC HA_MQTT_BASE "/fan/minka_fan/command"
 #define HA_FAN_STATE_TOPIC HA_MQTT_BASE "/fan/minka_fan/state"
 #define HA_FAN_AVAILABILITY_TOPIC HA_MQTT_BASE "/fan/minka_fan/availability"
+#define HA_FAN_PERCENTAGE_TOPIC HA_FAN_COMMAND_TOPIC "/percentage"
 
 // Light component topics
 #define HA_LIGHT_CONFIG_TOPIC HA_MQTT_BASE "/light/minka_light/config"
@@ -65,6 +66,21 @@ public:
      * @param status "online" or "offline"
      */
     static void publishAvailability(PubSubClient& client, const char* status);
+
+    /**
+     * Publish fan state (on/off, speed/percentage)
+     * @param client MQTT client reference
+     * @param state "on" or "off"
+     * @param percentage 0-100 (0=off, 1-33=low, 34-66=med, 67-100=high)
+     */
+    static void publishFanState(PubSubClient& client, const char* state, int percentage);
+
+    /**
+     * Publish light state (on/off)
+     * @param client MQTT client reference
+     * @param state "on" or "off"
+     */
+    static void publishLightState(PubSubClient& client, const char* state);
 };
 
 // ============================================================================
