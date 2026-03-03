@@ -1,20 +1,17 @@
 /**
  * ESP32 433MHz Remote for Home Assistant
  *
- * Controls a Minka Aire ceiling fan using 433MHz RF signals
- * Hardware: Adafruit ESP32-C6 Feather + RFM69HCW 433MHz FeatherWing
- * RF signals captured using Flipper Zero Sub-GHz
+ * Controls a Minka Aire ceiling fan using 433 MHz OOK (On-Off Keying).
+ * Hardware: ESP32-C6 Feather + OOK transmitter (e.g. FS1000A) on one GPIO.
+ * RF signals: Flipper Zero Sub-GHz Read Raw → RAW_Data in config.h.
  */
 
 #include <Arduino.h>
-#include <SPI.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-// Include project-specific modules
 #include "config.h"
-#include "rfm69_driver.h"
 #include "ha_mqtt.h"
 
 // ============================================================================
@@ -33,7 +30,6 @@
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
-RFM69Driver rfm69;
 
 bool wifiConnected = false;
 bool mqttConnected = false;
@@ -56,13 +52,11 @@ void setup() {
     Serial.println("Minka Aire 433MHz Remote for Home Assistant");
     Serial.println("========================================");
 
-    // Initialize the 433MHz RF transmitter
-    Serial.println("\n[1/3] Initializing RFM69HCW 433MHz...");
-    if (!rfm69.begin()) {
-        Serial.println("ERROR: Failed to initialize RFM69!");
-        while (1) delay(1000);  // Halt if radio fails
-    }
-    Serial.println("RFM69 initialized successfully");
+    // OOK transmitter DATA pin
+    Serial.println("\n[1/3] Initializing 433 MHz OOK transmitter...");
+    pinMode(OOK_TX_GPIO, OUTPUT);
+    digitalWrite(OOK_TX_GPIO, LOW);
+    Serial.printf("OOK transmitter ready (DATA on GPIO %d)\n", OOK_TX_GPIO);
 
     // Connect to WiFi network
     Serial.println("\n[2/3] Connecting to WiFi...");
@@ -309,17 +303,53 @@ void handleLightCommand(const char* command) {
 }
 
 // ============================================================================
+// OOK RAW TIMING REPLAY
+// ============================================================================
+
+/**
+ * Replay Flipper RAW_Data timing on the OOK transmitter DATA pin.
+ * Positive value = carrier ON for that many µs, negative = OFF.
+ */
+void sendOOKRaw(const int16_t* timings, size_t count, uint8_t repeats) {
+    for (uint8_t r = 0; r < repeats; r++) {
+        for (size_t i = 0; i < count; i++) {
+            int16_t t = timings[i];
+            if (t > 0) {
+                digitalWrite(OOK_TX_GPIO, HIGH);
+                delayMicroseconds((unsigned int)t);
+            } else if (t < 0) {
+                digitalWrite(OOK_TX_GPIO, LOW);
+                delayMicroseconds((unsigned int)(-t));
+            }
+        }
+        if (r + 1 < repeats) {
+            delay(10);
+        }
+    }
+    digitalWrite(OOK_TX_GPIO, LOW);
+}
+
+// ============================================================================
 // RF TRANSMISSION WRAPPERS
 // ============================================================================
 
 void transmitFanSpeed(int speed) {
-    // Clamp to valid range; driver will reject invalid values
     int clamped = (speed < FAN_SPEED_MIN) ? FAN_SPEED_MIN
                 : (speed > FAN_SPEED_MAX) ? FAN_SPEED_MAX : speed;
     int pct = (clamped == 1) ? 33 : (clamped == 2) ? 66 : 100;
     Serial.print("Transmitting fan speed ");
     Serial.println(clamped);
-    rfm69.transmitSignal(clamped);
+
+    const int16_t* sig = nullptr;
+    size_t len = 0;
+    switch (clamped) {
+        case 1: sig = SIGNAL_FAN_SPEED_1; len = SIGNAL_FAN_SPEED_1_LEN; break;
+        case 2: sig = SIGNAL_FAN_SPEED_2; len = SIGNAL_FAN_SPEED_2_LEN; break;
+        case 3: sig = SIGNAL_FAN_SPEED_3; len = SIGNAL_FAN_SPEED_3_LEN; break;
+        default: return;
+    }
+    sendOOKRaw(sig, len, OOK_REPEAT_COUNT);
+
     lastFanPercentage = pct;
     if (mqttConnected) {
         HADiscovery::publishFanState(mqttClient, "on", pct);
@@ -328,7 +358,7 @@ void transmitFanSpeed(int speed) {
 
 void transmitFanOff() {
     Serial.println("Transmitting fan off");
-    rfm69.transmitFanOff();
+    sendOOKRaw(SIGNAL_FAN_OFF, SIGNAL_FAN_OFF_LEN, OOK_REPEAT_COUNT);
     lastFanPercentage = 0;
     if (mqttConnected) {
         HADiscovery::publishFanState(mqttClient, "off", 0);
@@ -337,7 +367,7 @@ void transmitFanOff() {
 
 void transmitLightOn() {
     Serial.println("Transmitting light on");
-    rfm69.transmitLightOn();
+    sendOOKRaw(SIGNAL_LIGHT_ON, SIGNAL_LIGHT_ON_LEN, OOK_REPEAT_COUNT);
     lastLightState = true;
     if (mqttConnected) {
         HADiscovery::publishLightState(mqttClient, "on");
@@ -346,7 +376,7 @@ void transmitLightOn() {
 
 void transmitLightOff() {
     Serial.println("Transmitting light off");
-    rfm69.transmitLightOff();
+    sendOOKRaw(SIGNAL_LIGHT_OFF, SIGNAL_LIGHT_OFF_LEN, OOK_REPEAT_COUNT);
     lastLightState = false;
     if (mqttConnected) {
         HADiscovery::publishLightState(mqttClient, "off");

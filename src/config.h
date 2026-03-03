@@ -3,6 +3,9 @@
  *
  * For credentials, use secrets.h (copy from secrets.example.h).
  * Fallback: define credentials here (do NOT commit to git).
+ *
+ * RF signals: paste RAW_Data from Flipper Zero .sub files (Read Raw).
+ * Values are microseconds: positive = carrier ON, negative = carrier OFF.
  */
 
 #ifndef CONFIG_H
@@ -48,82 +51,52 @@ const char* DEVICE_NAME = "minka-fan-remote";
 // MQTT topic definitions are in ha_mqtt.h (command, state, config, availability)
 
 // ============================================================================
-// RFM69HCW PIN DEFINITIONS (ESP32-C6 Feather STEMMA QT)
+// OOK TRANSMITTER (e.g. FS1000A)
 // ============================================================================
 //
-// The RFM69HCW FeatherWing connects via STEMMA QT connector:
+// Connect transmitter DATA pin to this GPIO.
+// VCC → 3.3V or 5V, GND → GND.
 //
-// STEMMA QT Pin | ESP32-C6 GPIO | Function
-// --------------|---------------|----------
-// VCC           | 3.3V          | Power
-// GND           | GND           | Ground
-// SDA           | GPIO 8        | I2C SDA (not used by RFM69)
-// SCL           | GPIO 7        | I2C SCL (not used by RFM69)
-//
-// RFM69HCW uses SPI interface:
-//
-// Signal        | ESP32-C6 GPIO | Description
-// --------------|---------------|------------------
-// SCK           | GPIO 4        | SPI Clock
-// MISO          | GPIO 6        | SPI Master In Slave Out
-// MOSI          | GPIO 5        | SPI Master Out Slave In
-// NSS (CS)      | GPIO 14       | Chip Select
-// IRQ           | GPIO 13       | Interrupt (optional)
-// RST           | GPIO 15       | Reset pin
-//
-// ============================================================================
 
-#define RFM69_SPI_SCK     4   // SPI Clock
-#define RFM69_SPI_MISO    6   // SPI MISO
-#define RFM69_SPI_MOSI    5   // SPI MOSI
-#define RFM69_CS          14  // Chip Select
-#define RFM69_IRQ         13  // Interrupt pin
-#define RFM69_RST         15  // Reset pin
+#define OOK_TX_GPIO  14
 
 // ============================================================================
-// RFM69 RF CONFIGURATION
-// ============================================================================
-
-#define RFM69_FREQUENCY   433.0   // MHz
-#define RFM69_TX_POWER    22      // dBm (max for RFM69HCW)
-#define RFM69_NODEID      1       // Unique node ID
-#define RFM69_NETWORKID   100     // Network ID (must match on same network)
-
-// ============================================================================
-// CAPTURED RF SIGNALS (FROM FLIPPER ZERO)
+// RAW TIMING DATA (FROM FLIPPER ZERO .sub FILES)
 // ============================================================================
 //
-// IMPORTANT: RFM69 uses FSK modulation; many 433MHz remotes (including
-// Minka Aire) use OOK/ASK. The RFM69 may not replicate OOK signals.
-// If the fan does not respond, consider an OOK-capable transmitter
-// (e.g. SYN115, TX433) or verify your fan's modulation scheme.
+// From each .sub file: Preset FuriHalSubGhzPresetOok650Async, Protocol: RAW.
+// Copy the RAW_Data line; values are microseconds (positive = ON, negative = OFF).
+// Use int16_t; length is in elements.
 //
-// TODO: Replace these placeholder values with your actual captured signals
-// from the Flipper Zero Sub-GHz capture.
-//
-// Use Flipper Zero to capture the actual signal patterns, then convert
-// to the format expected by the RFM69 library.
-//
-// Example format (replace with actual values):
-//   uint8_t FAN_SPEED_1[] = {0xAA, 0xBB, 0xCC, ...};
-//
-// ============================================================================
 
-// Placeholder signal data - REPLACE WITH ACTUAL CAPTURED DATA
-// These are dummy values that won't work with your fan
-const uint8_t SIGNAL_FAN_SPEED_1[] = {0x01, 0x00, 0x00, 0x00};
-const uint8_t SIGNAL_FAN_SPEED_2[] = {0x02, 0x00, 0x00, 0x00};
-const uint8_t SIGNAL_FAN_SPEED_3[] = {0x03, 0x00, 0x00, 0x00};
-const uint8_t SIGNAL_FAN_OFF[]     = {0x00, 0x00, 0x00, 0x00};
-const uint8_t SIGNAL_LIGHT_ON[]    = {0x10, 0x00, 0x00, 0x00};
-const uint8_t SIGNAL_LIGHT_OFF[]   = {0x11, 0x00, 0x00, 0x00};
+#define OOK_REPEAT_COUNT  2   // Send sequence this many times per command (like Flipper "Send")
 
-// Signal lengths
-#define SIGNAL_FAN_SPEED_1_LEN 4
-#define SIGNAL_FAN_SPEED_2_LEN 4
-#define SIGNAL_FAN_SPEED_3_LEN 4
-#define SIGNAL_FAN_OFF_LEN     4
-#define SIGNAL_LIGHT_ON_LEN    4
-#define SIGNAL_LIGHT_OFF_LEN   4
+// Placeholder: replace with your captured RAW_Data from each button.
+// Example from power button capture (shortened); paste your full arrays.
+static const int16_t SIGNAL_FAN_SPEED_1[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+static const int16_t SIGNAL_FAN_SPEED_2[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+static const int16_t SIGNAL_FAN_SPEED_3[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+static const int16_t SIGNAL_FAN_OFF[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+static const int16_t SIGNAL_LIGHT_ON[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+static const int16_t SIGNAL_LIGHT_OFF[] = {
+    161, -264, 395, -132, 623, -134, 1335, -598, 65, -396
+};
+
+#define SIGNAL_FAN_SPEED_1_LEN  (sizeof(SIGNAL_FAN_SPEED_1) / sizeof(SIGNAL_FAN_SPEED_1[0]))
+#define SIGNAL_FAN_SPEED_2_LEN  (sizeof(SIGNAL_FAN_SPEED_2) / sizeof(SIGNAL_FAN_SPEED_2[0]))
+#define SIGNAL_FAN_SPEED_3_LEN  (sizeof(SIGNAL_FAN_SPEED_3) / sizeof(SIGNAL_FAN_SPEED_3[0]))
+#define SIGNAL_FAN_OFF_LEN      (sizeof(SIGNAL_FAN_OFF) / sizeof(SIGNAL_FAN_OFF[0]))
+#define SIGNAL_LIGHT_ON_LEN     (sizeof(SIGNAL_LIGHT_ON) / sizeof(SIGNAL_LIGHT_ON[0]))
+#define SIGNAL_LIGHT_OFF_LEN    (sizeof(SIGNAL_LIGHT_OFF) / sizeof(SIGNAL_LIGHT_OFF[0]))
 
 #endif // CONFIG_H
