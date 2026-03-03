@@ -5,34 +5,36 @@ A Home Assistant integration that uses an ESP32-C6 Feather with a 433MHz RF tran
 ## Hardware
 
 - **Microcontroller**: Adafruit ESP32-C6 Feather (STEMMA QT) - [Product Page](https://www.adafruit.com/product/5933)
-- **RF Transmitter**: Adafruit Radio FeatherWing - RFM69HCW 433MHz - [Product Page](https://www.adafruit.com/product/3230)
+- **RF Transmitter**: 433 MHz OOK transmitter module (e.g. FS1000A, XY-MK-5V) — 433.92 MHz, DATA pin driven by one GPIO
 
-The FeatherWing plugs directly onto the ESP32-C6 Feather using the STEMMA QT connector.
+The transmitter uses **OOK (On-Off Keying)** to replay raw timing captures from a Flipper Zero. Connect the module’s DATA pin to a GPIO, plus VCC and GND. See [SETUP.md](SETUP.md) and `components/433MHz-Module/` for wiring and specs.
 
 ### References
 
-- [ESP32-C6 Feather I2C/SPI Guide](https://learn.adafruit.com/adafruit-esp32-c6-feather/i2c)
-- [RFM69HCW 433MHz Library Documentation](https://learn.adafruit.com/adafruit-rfm69-hcw-915-israel/arduino-library)
-- [ESPHome Documentation](https://esphome.io/)
+- [ESP32-C6 Feather](https://learn.adafruit.com/adafruit-esp32-c6-feather)
+- [Flipper Zero Sub-GHz](https://docs.flipper.net/zero/sub-ghz/read) — capturing OOK signals
+- Project component: [FS1000A TX/RX description](components/433MHz-Module/FS1000A-TX-RX-description.md)
 
 ## How It Works
 
-1. The original Minka Aire remote signals were captured using a Flipper Zero Sub-GHz tool
-2. These RF signal patterns are stored in `src/config.h`
-3. When Home Assistant sends a command via MQTT, the ESP32 replays the captured RF signal
-4. The ceiling fan responds to the RF signal just like the original remote
+1. The original Minka Aire remote signals are captured with a Flipper Zero (Sub-GHz → Read Raw). The remote uses **OOK at 433.92 MHz**.
+2. The **RAW_Data** timing sequence from each `.sub` file is stored in `src/config.h` (alternating ON/OFF durations in microseconds).
+3. When Home Assistant sends a command via MQTT, the ESP32 drives the OOK transmitter’s DATA pin with that timing sequence.
+4. The ceiling fan responds to the replayed OOK signal like the original remote.
 
 ## Project Structure
 
 ```
 .
 ├── platformio.ini        # PlatformIO build configuration
+├── components/433MHz-Module/   # FS1000A TX/RX specs and wiring
+├── arduino-example/      # Reference OOK TX/RX examples (renamed for clarity)
 └── src/
-    ├── main.cpp          # Application entry point
-    ├── config.h          # WiFi, MQTT, RF signal configuration
+    ├── main.cpp          # Entry point, WiFi/MQTT, command dispatch
+    ├── config.h          # WiFi, MQTT, OOK raw timing data
     ├── secrets.example.h # Template for credentials (copy to secrets.h)
-    ├── rfm69_driver.h    # RFM69 radio driver header
-    ├── rfm69_driver.cpp  # RFM69 radio driver implementation
+    ├── rfm69_driver.h    # RF driver header (OOK timing replay)
+    ├── rfm69_driver.cpp  # RF driver implementation
     ├── ha_mqtt.h         # Home Assistant MQTT integration header
     └── ha_mqtt.cpp       # Home Assistant MQTT integration implementation
 ```
@@ -64,11 +66,7 @@ For detailed hardware assembly, Flipper Zero capture steps, and power setup, see
    #define MQTT_PASSWORD ""
    ```
 
-3. **Add your captured RF signals** in `src/config.h`:
-   ```cpp
-   // Replace these with your actual Flipper Zero captures
-   const uint8_t SIGNAL_FAN_SPEED_1[] = {0x01, 0x00, 0x00, 0x00};
-   ```
+3. **Add your captured RF signals** in `src/config.h`: paste the **RAW_Data** timing array from each Flipper `.sub` file (positive = carrier ON µs, negative = carrier OFF µs). See [SETUP.md](SETUP.md) for capture steps.
 
 4. **Build and upload**:
    ```bash
@@ -83,26 +81,12 @@ For detailed hardware assembly, Flipper Zero capture steps, and power setup, see
 
 ## Capturing RF Signals with Flipper Zero
 
-### Step 1: Capture the Signal
+1. Use **Sub-GHz → Read Raw** with frequency **433.92 MHz** and modulation **AM650** (OOK). Press the remote button and save.
+2. Confirm the `.sub` file shows **Preset: FuriHalSubGhzPresetOok650Async** and **Protocol: RAW**.
+3. Test with **Emulate** / **Send** so the fan responds.
+4. Copy the **RAW_Data** line from the `.sub` file into `src/config.h` as the timing array for that button (values in microseconds; positive = ON, negative = OFF).
 
-1. Open Flipper Zero Sub-GHz menu
-2. Select "Receive" mode
-3. Press a button on your Minka Aire remote
-4. Save the captured signal
-
-### Step 2: Analyze the Signal
-
-1. Export the capture as a `.sub` file
-2. Use tools like [Flipper-SubGhz-Reader](https://github.com/G300B/Flipper-SubGhz-Reader) to decode
-3. Extract the pulse pattern or raw data
-
-### Step 3: Convert to Code
-
-The captured signal needs to be converted to the format used by the RFM69 library. This typically involves:
-
-- Converting pulse positions to binary data
-- Identifying the modulation scheme (OOK, FSK, PPM, etc.)
-- Creating the appropriate transmit sequence
+See [SETUP.md](SETUP.md) for detailed capture steps and wiring.
 
 ## Home Assistant Integration
 
@@ -158,11 +142,9 @@ pio run --target upload
 
 ### Fan not responding to commands
 
-- **RFM69 vs. OOK**: The RFM69 uses FSK modulation. Many 433MHz remotes (including Minka Aire) use OOK/ASK. If the fan does not respond, the RFM69 may be incompatible—consider an OOK-capable transmitter (e.g. SYN115, TX433).
-- Verify the RF signal codes in `config.h` match your captured data
-- Ensure the ESP32 is within range of the fan
-- Try moving the ESP32 closer to the fan
-- Check the RFM69 FeatherWing is properly seated
+- Verify the **RAW_Data** timing in `config.h` matches your Flipper capture and that you’re replaying it multiple times (like the Flipper “Send”).
+- Ensure the OOK transmitter DATA pin is on the correct GPIO and the module has power (3.3–5 V).
+- Keep the transmitter close to the fan and away from metal that blocks 433 MHz.
 
 ### MQTT connection fails
 

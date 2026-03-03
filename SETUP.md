@@ -21,12 +21,12 @@ This guide walks you through hardware assembly, capturing RF signals with a Flip
 | Component | Description | Link |
 |-----------|-------------|------|
 | **ESP32-C6 Feather** | Microcontroller with WiFi, USB-C | [Adafruit Product](https://www.adafruit.com/product/5933) |
-| **RFM69HCW 433MHz FeatherWing** | 433MHz RF transceiver | [Adafruit Product](https://www.adafruit.com/product/3230) |
-| **Flipper Zero** | For capturing remote signals | [Flipper Zero](https://flipperzero.one/) |
+| **433 MHz OOK transmitter** | e.g. FS1000A — 433.92 MHz, DATA pin (OOK) | See `components/433MHz-Module/FS1000A-TX-RX-description.md` |
+| **Flipper Zero** | For capturing remote signals (Read Raw → RAW_Data) | [Flipper Zero](https://flipperzero.one/) |
 | **USB-C cable** | For programming and power during setup | — |
 | **5V USB power supply** | 1A minimum (for permanent install) | — |
 
-The RFM69 FeatherWing stacks directly onto the ESP32-C6 Feather using the standard Feather header pins—no wires required for the radio connection.
+The Minka Aire remote uses **OOK at 433.92 MHz**. The FS1000A (or compatible) transmitter is driven by one GPIO: HIGH = carrier on, LOW = carrier off, with timings from your Flipper RAW capture.
 
 ---
 
@@ -60,17 +60,16 @@ If the signal is weak or not decoded, try **Hopping: ON** to scan multiple frequ
 4. Name the file (e.g. `fan_speed_1`) and save.
 5. Repeat for every button: Fan Off, Speed 1/2/3, Light On/Off.
 
-### Step 4: Read Raw (Unknown Protocols)
+### Step 4: Read Raw (for OOK replay)
 
-If the remote uses a protocol Flipper Zero doesn’t recognize:
+For this project we use **Read Raw** so we get exact timings to replay on the OOK transmitter:
 
 1. Go to **Main Menu → Sub-GHz → Read Raw**.
-2. Set the same frequency and modulation as above.
-3. Press **Rec** to start recording.
-4. Press the remote button several times.
-5. Press **Stop** → **Save** and name the file.
+2. Set the same frequency (433.92 MHz) and modulation (AM650) as above.
+3. Press **Rec**, then press the remote button several times.
+4. Press **Stop** → **Save** and name the file (e.g. `fan_power`).
 
-Raw captures need to be converted later to bytes for use in firmware.
+Open the `.sub` file and copy the **RAW_Data** line into your firmware (see Software Configuration). Values are in microseconds: positive = carrier ON, negative = carrier OFF.
 
 ### References
 
@@ -97,32 +96,26 @@ If the fan does not respond:
 
 ---
 
-## 4. Connecting the 433MHz Board to ESP32-C6
+## 4. Connecting the 433 MHz OOK Transmitter to ESP32-C6
 
-### Physical Assembly
+### Wiring (FS1000A or compatible)
 
-1. Align the RFM69 FeatherWing with the ESP32-C6 Feather header pins.
-2. Press the FeatherWing down firmly so all pins make contact.
-3. No jumper wires are needed; the stack uses the Feather standard pinout.
+| Transmitter pin | Connect to |
+|-----------------|------------|
+| **VCC**         | 3.3 V or 5 V (from Feather 3V or USB 5V) |
+| **GND**         | GND |
+| **DATA**        | One GPIO (e.g. GPIO 14); define in `src/config.h` |
 
-### Pin Mapping (ESP32-C6 Feather)
+Use short wires and keep the antenna (or 32 cm wire) away from metal. 3.3 V logic is fine; 5 V supply to the module can improve range.
 
-| RFM69 Signal | ESP32-C6 GPIO | Function |
-|--------------|---------------|----------|
-| SCK          | 4             | SPI Clock |
-| MISO         | 6             | SPI Data In |
-| MOSI         | 5             | SPI Data Out |
-| NSS (CS)     | 14            | Chip Select |
-| IRQ          | 13            | Interrupt (optional) |
-| RST          | 15            | Reset |
+### Pin choice
 
-These are already defined in `src/config.h`. The FeatherWing receives **3.3V** and **GND** from the Feather.
+Pick any free GPIO and set it in `src/config.h` (e.g. `OOK_TX_GPIO 14`). Avoid pins used for USB, boot, or flash.
 
-### Verify Connection
+### Verify
 
-1. Connect the stack via USB-C.
-2. Flash the firmware (see next section).
-3. Open the serial monitor—you should see `RFM69 initialized successfully at 433MHz`.
+1. Connect via USB-C, flash firmware, open serial monitor.
+2. Trigger a command (e.g. from Home Assistant or a test in code); the fan should respond if the RAW_Data for that button is correct and the transmitter is powered and wired correctly.
 
 ---
 
@@ -132,7 +125,7 @@ These are already defined in `src/config.h`. The FeatherWing receives **3.3V** a
 
 - [PlatformIO](https://platformio.org/) (VS Code extension or standalone CLI)
 - USB-C cable
-- ESP32-C6 + RFM69 stack
+- ESP32-C6 Feather + 433 MHz OOK transmitter (e.g. FS1000A) wired as above
 
 ### Steps
 
@@ -172,12 +165,12 @@ If upload fails:
 
 ### Voltage Requirements
 
-| Board | Input | Notes |
-|-------|-------|-------|
-| ESP32-C6 Feather | 5V (USB) or 3.7–4.2V LiPo | Built-in 3.3V regulator |
-| RFM69 FeatherWing | 3.3V | Powered from Feather |
+| Board / module | Input | Notes |
+|----------------|-------|-------|
+| ESP32-C6 Feather | 5 V (USB) or 3.7–4.2 V LiPo | Built-in 3.3 V regulator |
+| FS1000A transmitter | 3–12 V (typ. 3.3 or 5 V) | DATA pin: 3.3 V logic from Feather |
 
-The ESP32-C6 Feather needs **5V USB** (or LiPo) and supplies 3.3V to the FeatherWing.
+Power the transmitter from 3.3 V or 5 V (e.g. Feather 3V or 5V pin). Do not backfeed 12 V into the Feather.
 
 ### Powering from 120VAC
 
@@ -196,8 +189,8 @@ For a permanent installation near the fan:
 
 ### Placement Tips
 
-- Mount the stack close to the fan for best RF link.
-- Keep it away from metal enclosures that block 433 MHz.
+- Mount the ESP32 and transmitter close to the fan for best RF link.
+- Keep the antenna (or ~32 cm wire) away from metal that blocks 433 MHz.
 - A small plastic enclosure with a USB power feed works well.
 
 ---
@@ -208,8 +201,9 @@ After hardware is set up:
 
 1. Copy `src/secrets.example.h` to `src/secrets.h`.
 2. Edit `src/secrets.h` with your WiFi and MQTT settings.
-3. Replace the placeholder RF data in `src/config.h` with your Flipper Zero captures.
-4. Build and upload again.
+3. In `src/config.h`, add your Flipper **RAW_Data** timing arrays (one per button) from each `.sub` file. Use the same format: positive = ON µs, negative = OFF µs.
+4. Set the OOK transmitter GPIO in `src/config.h` to match your wiring.
+5. Build and upload again.
 
 See the main [README.md](README.md) for full configuration and Home Assistant integration details.
 
@@ -232,10 +226,9 @@ See the main [README.md](README.md) for full configuration and Home Assistant in
 
 | Issue | Possible cause | Action |
 |-------|----------------|--------|
-| RFM69 init fails | Poor contact, wrong pins | Reseat FeatherWing, check pin mapping |
-| Fan not responding | Wrong modulation or codes | Re-capture with different modulation, verify codes |
+| Fan not responding | Wrong RAW_Data or wiring | Confirm Flipper Emulate works; check DATA pin GPIO and VCC/GND; replay timing 2–3 times |
 | No WiFi | Wrong SSID/password | Check `secrets.h` |
 | No MQTT | Broker unreachable | Check IP, port 1883, credentials |
 | Upload fails | Bootloader not active | Hold Boot, press Reset, retry upload |
 
-**Modulation note:** The RFM69 uses FSK. Many 433 MHz remotes use OOK/ASK. If the fan never responds, the RFM69 may not be compatible; consider an OOK-capable transmitter instead.
+Ensure the `.sub` capture uses **Preset: FuriHalSubGhzPresetOok650Async** (OOK). The FS1000A is OOK-only and matches this.
