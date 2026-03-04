@@ -29,7 +29,7 @@
 // DEVICE CONFIGURATION
 // ============================================================================
 
-const char* DEVICE_NAME = "minka-fan-remote";
+inline const char* DEVICE_NAME = "minka-fan-remote";
 
 // ============================================================================
 // MQTT CONFIGURATION (Home Assistant)

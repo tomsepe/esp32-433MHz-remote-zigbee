@@ -15,6 +15,7 @@ src/secrets.h
 .idea/
 *.swp
 *.swo
+.venv/
 
 # OS files
 .DS_Store

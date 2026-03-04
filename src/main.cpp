@@ -16,6 +16,20 @@
 #include "ha_mqtt.h"
 
 // ============================================================================
+// FORWARD DECLARATIONS
+// ============================================================================
+
+void connectWiFi();
+void setupMQTT();
+void announceDevice();
+void transmitFanOff();
+void transmitFanSpeed(int speed);
+void transmitLightOn();
+void transmitLightOff();
+void handleFanCommand(const char* command, JsonDocument& doc);
+void handleLightCommand(const char* command);
+
+// ============================================================================
 // CONSTANTS
 // ============================================================================
 
