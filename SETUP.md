@@ -131,17 +131,19 @@ Pick any free GPIO and set it in `src/config.h` (e.g. `OOK_TX_GPIO 14`). Avoid p
 
 1. Open the project in VS Code (or your editor with PlatformIO).
 2. Connect the stack via USB-C.
-3. Build and upload:
+3. Build and upload (first flash must be over USB):
 
    ```bash
    pio run --target upload
    ```
 
-4. Open the serial monitor (115200 baud):
+4. Open the serial monitor (115200 baud). Note the device’s IP address printed at boot—you’ll need it for over-the-air updates:
 
    ```bash
    pio device monitor
    ```
+
+**After the first successful USB flash**, you can update firmware over WiFi (OTA). Set `upload_port` in `platformio.ini` to the device’s IP and run `pio run --target upload`, or use `--upload-port=192.168.1.xxx`. See [README.md – OTA Updates](README.md#ota-updates) for details.
 
 ### Entering Bootloader Mode
 
@@ -200,10 +202,10 @@ For a permanent installation near the fan:
 After hardware is set up:
 
 1. Copy `src/secrets.example.h` to `src/secrets.h`.
-2. Edit `src/secrets.h` with your WiFi and MQTT settings.
+2. Edit `src/secrets.h` with your WiFi and MQTT settings. Optionally set `OTA_PASSWORD` for over-the-air updates (if set, add `upload_flags = --auth='your_password'` in `platformio.ini` when using OTA).
 3. In `src/config.h`, add your Flipper **RAW_Data** timing arrays (one per button) from each `.sub` file. Use the same format: positive = ON µs, negative = OFF µs.
 4. Set the OOK transmitter GPIO in `src/config.h` to match your wiring.
-5. Build and upload again.
+5. Build and upload again (first upload via USB; later you can use [OTA](README.md#ota-updates)).
 
 See the main [README.md](README.md) for full configuration and Home Assistant integration details.
 
@@ -214,10 +216,11 @@ See the main [README.md](README.md) for full configuration and Home Assistant in
 | Task | Command / Location |
 |------|--------------------|
 | Build | `pio run` |
-| Upload | `pio run --target upload` |
+| Upload (USB) | `pio run --target upload` |
+| Upload (OTA) | `pio run --target upload` (set `upload_port` in `platformio.ini` to device IP) |
 | Serial monitor | `pio device monitor` |
 | Clean build | `pio run --target clean` |
-| Credentials | `src/secrets.h` |
+| Credentials | `src/secrets.h` (optional: `OTA_PASSWORD` for OTA) |
 | RF signal data | `src/config.h` |
 
 ---
@@ -229,6 +232,7 @@ See the main [README.md](README.md) for full configuration and Home Assistant in
 | Fan not responding | Wrong RAW_Data or wiring | Confirm Flipper Emulate works; check DATA pin GPIO and VCC/GND; replay timing 2–3 times |
 | No WiFi | Wrong SSID/password | Check `secrets.h` |
 | No MQTT | Broker unreachable | Check IP, port 1883, credentials |
-| Upload fails | Bootloader not active | Hold Boot, press Reset, retry upload |
+| Upload fails (USB) | Bootloader not active | Hold Boot, press Reset, retry upload |
+| OTA upload fails | Wrong IP or auth | Set `upload_port` to device IP (see serial at boot); if using OTA password, set `upload_flags` in `platformio.ini` |
 
 Ensure the `.sub` capture uses **Preset: FuriHalSubGhzPresetOok650Async** (OOK). The FS1000A is OOK-only and matches this.

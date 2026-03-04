@@ -26,15 +26,13 @@ The transmitter uses **OOK (On-Off Keying)** to replay raw timing captures from 
 
 ```
 .
-├── platformio.ini        # PlatformIO build configuration
+├── platformio.ini        # PlatformIO build configuration (includes OTA upload settings)
 ├── components/433MHz-Module/   # FS1000A TX/RX specs and wiring
 ├── arduino-example/      # Reference OOK TX/RX examples (renamed for clarity)
 └── src/
-    ├── main.cpp          # Entry point, WiFi/MQTT, command dispatch
-    ├── config.h          # WiFi, MQTT, OOK raw timing data
+    ├── main.cpp          # Entry point, WiFi/MQTT, ArduinoOTA, OOK timing replay
+    ├── config.h          # WiFi, MQTT, OTA password, OOK GPIO and raw timing data
     ├── secrets.example.h # Template for credentials (copy to secrets.h)
-    ├── rfm69_driver.h    # RF driver header (OOK timing replay)
-    ├── rfm69_driver.cpp  # RF driver implementation
     ├── ha_mqtt.h         # Home Assistant MQTT integration header
     └── ha_mqtt.cpp       # Home Assistant MQTT integration implementation
 ```
@@ -64,17 +62,18 @@ For detailed hardware assembly, Flipper Zero capture steps, and power setup, see
    #define MQTT_PORT 1883
    #define MQTT_USER ""
    #define MQTT_PASSWORD ""
+   // Optional, for OTA updates: #define OTA_PASSWORD "your_ota_password"
    ```
 
 3. **Add your captured RF signals** in `src/config.h`: paste the **RAW_Data** timing array from each Flipper `.sub` file (positive = carrier ON µs, negative = carrier OFF µs). See [SETUP.md](SETUP.md) for capture steps.
 
-4. **Build and upload**:
+4. **Build and upload** (first time use USB; after that you can use [OTA](#ota-updates)):
    ```bash
    pio run
    pio run --target upload
    ```
 
-5. **Monitor serial output**:
+5. **Monitor serial output** (device prints its IP at boot for later OTA):
    ```bash
    pio device monitor
    ```
@@ -126,11 +125,25 @@ light:
 
 ## OTA Updates
 
-Once the device is connected to WiFi, you can update firmware over-the-air:
+You can update firmware over-the-air after the device is on WiFi, so you don’t need physical access once it’s installed.
 
-```bash
-pio run --target upload
-```
+1. **First flash must be over USB.** Flash the OTA-capable firmware once with:
+   ```bash
+   pio run --target upload
+   ```
+   (with the board connected by USB). The device will print its IP address at boot.
+
+2. **Later updates over WiFi:** Set `upload_port` in `platformio.ini` to the device’s IP (e.g. `192.168.1.xxx`), or pass it when uploading:
+   ```bash
+   pio run --target upload --upload-port=192.168.1.xxx
+   ```
+
+3. **If you set an OTA password** in `src/secrets.h` (`OTA_PASSWORD`), add the same password to `platformio.ini` under `upload_flags`, e.g.:
+   ```ini
+   upload_flags = --auth='your_password'
+   ```
+
+See **[SETUP.md](SETUP.md)** for initial programming steps and optional OTA password in software configuration.
 
 ## Troubleshooting
 
@@ -151,6 +164,12 @@ pio run --target upload
 - Verify Home Assistant MQTT broker is running
 - Check MQTT credentials in `src/config.h` or `src/secrets.h`
 - Ensure firewall allows MQTT traffic (port 1883)
+
+### OTA upload fails
+
+- Ensure the device is on WiFi and you have its current IP (printed at boot).
+- Set `upload_port` in `platformio.ini` or use `pio run --target upload --upload-port=192.168.1.xxx`.
+- If you use an OTA password, set `upload_flags = --auth='your_password'` in `platformio.ini` to match `OTA_PASSWORD` in `secrets.h`.
 
 ## License
 

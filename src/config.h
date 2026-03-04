@@ -51,6 +51,15 @@ const char* DEVICE_NAME = "minka-fan-remote";
 // MQTT topic definitions are in ha_mqtt.h (command, state, config, availability)
 
 // ============================================================================
+// OTA (Over-The-Air) UPDATES
+// ============================================================================
+// Optional password for ArduinoOTA. Define in secrets.h to restrict who can push
+// firmware. If undefined or empty, OTA accepts connections without auth.
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD ""
+#endif
+
+// ============================================================================
 // OOK TRANSMITTER (e.g. FS1000A)
 // ============================================================================
 //

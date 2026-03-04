@@ -18,4 +18,8 @@
 #define MQTT_USER ""
 #define MQTT_PASSWORD ""
 
+// Optional: set a password for OTA firmware updates (ArduinoOTA).
+// If set, add upload_flags = --auth='your_password' in platformio.ini.
+#define OTA_PASSWORD ""
+
 #endif

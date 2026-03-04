@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 
 #include "config.h"
 #include "ha_mqtt.h"
@@ -53,20 +54,49 @@ void setup() {
     Serial.println("========================================");
 
     // OOK transmitter DATA pin
-    Serial.println("\n[1/3] Initializing 433 MHz OOK transmitter...");
+    Serial.println("\n[1/4] Initializing 433 MHz OOK transmitter...");
     pinMode(OOK_TX_GPIO, OUTPUT);
     digitalWrite(OOK_TX_GPIO, LOW);
     Serial.printf("OOK transmitter ready (DATA on GPIO %d)\n", OOK_TX_GPIO);
 
     // Connect to WiFi network
-    Serial.println("\n[2/3] Connecting to WiFi...");
+    Serial.println("\n[2/4] Connecting to WiFi...");
     connectWiFi();
     if (!wifiConnected) {
         Serial.println("WARNING: WiFi connection failed, continuing without network");
     }
 
+    // Over-the-air updates (only when WiFi is up)
+    if (wifiConnected) {
+        Serial.println("\n[3/4] Starting ArduinoOTA...");
+        ArduinoOTA.setHostname(DEVICE_NAME);
+#ifdef OTA_PASSWORD
+        ArduinoOTA.setPassword(OTA_PASSWORD);
+#endif
+        ArduinoOTA.onStart([]() {
+            Serial.println("OTA update start");
+        });
+        ArduinoOTA.onEnd([]() {
+            Serial.println("\nOTA update end");
+        });
+        ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+            Serial.printf("OTA progress: %u%%\r", (progress / (total / 100)));
+        });
+        ArduinoOTA.onError([](ota_error_t err) {
+            Serial.printf("OTA error %u: ", err);
+            if (err == OTA_AUTH_ERROR) Serial.println("auth failed");
+            else if (err == OTA_BEGIN_ERROR) Serial.println("begin failed");
+            else if (err == OTA_CONNECT_ERROR) Serial.println("connect failed");
+            else if (err == OTA_RECEIVE_ERROR) Serial.println("receive failed");
+            else if (err == OTA_END_ERROR) Serial.println("end failed");
+            else Serial.println("unknown");
+        });
+        ArduinoOTA.begin();
+        Serial.println("ArduinoOTA ready");
+    }
+
     // Initialize MQTT for Home Assistant integration
-    Serial.println("\n[3/3] Initializing MQTT client...");
+    Serial.println("\n[4/4] Initializing MQTT client...");
     setupMQTT();
 
     Serial.println("\n========================================");
@@ -79,6 +109,8 @@ void setup() {
 // ============================================================================
 
 void loop() {
+    ArduinoOTA.handle();
+
     // Periodic WiFi reconnect when disconnected
     if (!wifiConnected && (millis() - lastWifiRetry > WIFI_RETRY_INTERVAL_MS)) {
         lastWifiRetry = millis();
