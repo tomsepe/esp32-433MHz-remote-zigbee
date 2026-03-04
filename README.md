@@ -9,6 +9,10 @@ A Home Assistant integration that uses an ESP32-C6 Feather with a 433MHz RF tran
 
 The transmitter uses **OOK (On-Off Keying)** to replay raw timing captures from a Flipper Zero. Connect the module’s DATA pin to a GPIO, plus VCC and GND. See [SETUP.md](SETUP.md) and `components/433MHz-Module/` for wiring and specs.
 
+### OOK vs FSK
+
+Many 433 MHz remotes and transmitter modules use **FSK (Frequency Shift Keying)** or other modulation schemes. This project is **specific to OOK**: the Minka Aire remote (and compatible ceiling fans) use **OOK at 433.92 MHz**, so you need an OOK-capable transmitter (e.g. FS1000A) and raw timing capture—not an FSK protocol. If your target device uses FSK or another modulation, the hardware and firmware approach would differ.
+
 ### References
 
 - [ESP32-C6 Feather](https://learn.adafruit.com/adafruit-esp32-c6-feather)
